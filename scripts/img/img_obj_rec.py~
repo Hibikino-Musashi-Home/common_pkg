@@ -1,0 +1,185 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#オブジェクト認識のROSノード
+#
+#author: Yuichiro TANAKA
+#date: 16/03/18
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#オブジェクト認識に必要
+#OpenCVなど
+import cv2
+import numpy as np
+import skimage.data
+
+#caffe
+import caffe
+from caffe.proto import caffe_pb2
+
+
+#array for detected image
+croped_width   = 224
+croped_height  = 224
+
+
+names = [
+	'green_tea/',
+	'orange_juice/',
+	'brown_tea/',
+	'japanese_tea/',
+	'red_tea/',
+	'lemon_tea/',
+	'strawberry_juice/',
+	'cup_star/',
+	'cup_noodle/',
+	'seafood_noodle/',
+	'korean_soup/',
+	'egg_soup/',
+	'onion_dressing/',
+	'japanese_dressing/',
+	'chip_star/',
+	'pringles/',
+	'long_potato/',
+	'blue_potato/',
+	'red_potato/',
+    'stick_potato/',
+	'bleach/',
+	'cloth_cleaner/',
+	'softener/',
+	'dish_cleaner/',
+	'bath_cleaner/'
+]
+
+group = [
+    #aspect < aspectTH
+    [   'blue_potato/',
+        'red_potato/',
+        'korean_soup/',
+        'egg_soup/',
+        'cup_star/',
+        'cup_noodle/',
+        'seafood_noodle/',
+        'long_potato/',
+        'stick_potato/'
+        #'red_tea/',         #nearTH
+        #'lemon_tea/',       #nearTH
+        #'strawberry_juice/',#nearTH
+        #'green_tea/',       #nearTH
+        #'orange_juice/',    #nearTH
+        #'brown_tea/',       #nearTH
+        #'japanese_tea/'     #nearTH
+    ],
+    #aspect >= aspectTH
+    [   #'red_tea/',         #nearTH
+        #'lemon_tea/',       #nearTH
+        #'strawberry_juice/',#nearTH
+        #'green_tea/',       #nearTH
+        #'orange_juice/',    #nearTH
+        #'brown_tea/',       #nearTH
+        #'japanese_tea/',    #nearTH
+        'onion_dressing/',
+        'japanese_dressing/',
+        'chip_star/',
+        'pringles/',
+        'bleach/',
+        'cloth_cleaner/',
+        'softener/',
+        'dish_cleaner/',
+        'bath_cleaner/'
+    ]
+]
+
+aspectTH = 1.7
+
+
+class ObjRec(object):
+    def __init__(self):        
+        self._obj_rec_action_server = actionlib.SimpleActionServer('obj_rec_action', ObjRecAction, execute_cb = self.obj_rec)
+        self._obj_rec_action_server.start()
+        self._cv_bridge = CvBridge()
+        
+        #caffe classifier of shape
+        learned_path    = os.path.abspath(os.path.dirname(__file__)) + '/learned_160315_googlenet_25/'
+        
+        caffe.set_mode_gpu()
+        prototxt_path   = learned_path + 'const.prototxt'
+        caffemodel_path = learned_path + 'model.caffemodel'
+        self.classifier = caffe.Classifier(prototxt_path, caffemodel_path, raw_scale = 255, channel_swap = (2, 1, 0))
+
+    
+    def obj_rec(self, goal):      
+        goal.obj_rec_goal.encoding = 'bgr8'
+
+        #convert image
+        cv2img = self._cv_bridge.imgmsg_to_cv2(goal.obj_rec_goal, 'bgr8')
+        cv2img_array = np.array(cv2img, dtype = np.uint8)
+        cv2.normalize(cv2img_array, cv2img_array, 0, 255, cv2.NORM_MINMAX)
+
+        #check aspect propotion
+        aim_obj = rospy.get_param('/param/iarm/obj/id') - 1
+        aspect = float(cv2img_array.shape[0]) / cv2img_array.shape[1]
+        
+        if aspect < aspectTH:
+            if names[aim_obj] in group[1]:
+                result = ObjRecResult(obj_rec_result = -1)
+                self._obj_rec_action_server.set_succeeded(result)
+                return
+        else:
+            if names[aim_obj] in group[0]:
+                result = ObjRecResult(obj_rec_result = -1)
+                self._obj_rec_action_server.set_succeeded(result)
+                return
+        
+        #resize image
+        image = cv2.resize(cv2img_array, (croped_width, croped_height))  
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = skimage.img_as_float(image).astype(np.float32)
+        
+        out   = self.classifier.predict([image], oversample = False)
+        pred  = np.argmax(out)
+
+        print names[pred]
+
+        result = ObjRecResult(obj_rec_result = pred + 1)
+        self._obj_rec_action_server.set_succeeded(result)
+    
+    '''
+    def obj_rec_dammy(self, img):
+        image = cv2.resize(img, (croped_width, croped_height))  
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = skimage.img_as_float(image).astype(np.float32)
+
+        out = self.classifier.predict([image], oversample = False)
+        pred = np.argmax(out)
+
+        print names[pred]
+    '''
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+    
+    if rospy.get_param('/param/dbg/sm/flow') == 0 and rospy.get_param('/param/dbg/speech/onlyspeech') == 0:
+        obj_rec = ObjRec()
+        '''
+        img_dir = '../atHome160306_noise_restaurant2/original/'
+        for i in range(2000, 2100):
+            img = cv2.imread(img_dir + names[15] + str(i) + '.jpg')    
+            obj_rec.obj_rec_dammy(img)
+        '''   
+        main_rate = rospy.Rate(30)
+        while not rospy.is_shutdown():
+            main_rate.sleep()

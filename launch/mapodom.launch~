@@ -1,0 +1,10 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<!--X Y Z Y(Z) P(Y) R(X)-->
+    <!--周期: 33[ms]-->
+
+	<node pkg="tf" type="static_transform_publisher" name="map2odom" output="screen"
+        args="0 0 0 0 0 0 map odom 33"
+	/>
+</launch>

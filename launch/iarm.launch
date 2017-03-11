@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+    <node pkg="common_pkg" type="iarm_controller.py" name="iarm_controller" output="screen"/>
+</launch>

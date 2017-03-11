@@ -1,0 +1,9 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<!--<include file="$(find common_pkg)/launch/servo_lift.launch"/>-->
+    <include file="$(find common_pkg)/launch/sensor.launch"/>
+    <!--<include file="$(find common_pkg)/launch/slam.launch"/>-->
+    <!--<include file="$(find common_pkg)/launch/tf.launch"/>-->
+    <include file="$(find common_pkg)/launch/speech_syn.launch"/>
+</launch>

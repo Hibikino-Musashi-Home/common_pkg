@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import rospy
+
+import tf
+
+import os
+import sys
+
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    tf_listener = tf.TransformListener()
+
+    main_rate = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        try:
+            (translation, rotation) = tf_listener.lookupTransform('/map', '/base_link', rospy.Time(0))
+        except:
+            continue
+
+        print 'x: ' + str(round(translation[0], 3)) + ' y: ' + str(round(translation[1], 3))
+
+        map2base_link = tf.TransformBroadcaster()
+        map2base_link.sendTransform((translation[0], translation[1], translation[2]), (rotation[0], rotation[1], rotation[2], rotation[3]), rospy.Time.now(), "base_link", "map")
+    
+        main_rate.sleep()

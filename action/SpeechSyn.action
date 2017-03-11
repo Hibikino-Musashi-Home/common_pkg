@@ -1,0 +1,6 @@
+string speech_syn_goal
+---
+bool speech_syn_result
+---
+bool speech_syn_feedback
+

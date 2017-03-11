@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#scanとtfを再生するROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/12
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#--------------------------------------------------
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    rospy.loginfo('Loading /scan and /tf topic now')
+
+    bag = rosbag.Bag(os.path.expanduser('~') + '/scan_tf.bag')
+
+    odom2base_link = tf.TransformBroadcaster()
+
+    pub_scan = rospy.Publisher('/scan', LaserScan, queue_size = 1)
+
+    main_rate = rospy.Rate(1500)
+    for topic, msg, time in bag.read_messages(['/scan', '/tf']): #topic: トピック名 msg:データ time: bag記録時間
+        if topic == '/tf':
+            if msg.transforms[0].header.frame_id == 'map':
+                if msg.transforms[0].child_frame_id == 'base_link':
+                    odom2base_link.sendTransform((msg.transforms[0].transform.translation.x,
+                                                  msg.transforms[0].transform.translation.y,
+                                                  msg.transforms[0].transform.translation.z),
+                                                 (msg.transforms[0].transform.rotation.x,
+                                                  msg.transforms[0].transform.rotation.y,
+                                                  msg.transforms[0].transform.rotation.z,
+                                                  msg.transforms[0].transform.rotation.w),
+                                                 rospy.Time.now(),
+                                                 "base_link", "odom")
+        else:
+            msg.header.stamp = rospy.get_rostime();
+            pub_scan.publish(msg)
+
+        main_rate.sleep()
+
+        if rospy.is_shutdown():
+            break
+
+    rospy.loginfo('Loading /scan and /tf topic now SUCCSSES')

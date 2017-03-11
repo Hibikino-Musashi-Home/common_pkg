@@ -1,0 +1,36 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<include file="$(find openni2_launch)/launch/openni2.launch" />
+
+    <!-- cam_pan_tilt -->
+    <include file="$(find common_pkg)/launch/servo/dy_servo_cam.launch" />
+
+    <!-- cam_lift -->
+    <node pkg="rosserial_python" type="serial_node.py" name="serial_node" output="screen"
+        args="_port:=/dev/ttyACM0"
+    />
+    <node pkg="common_pkg" type="cam_lift.py" name="cam_lift" output="screen" />
+
+    <!-- mic_pan_tilt -->
+    <include file="$(find common_pkg)/launch/servo/dy_servo_mic.launch" />
+
+
+	<node pkg="common_pkg" type="exia_controller.py" name="exia_controller" output="screen"/>
+	<node pkg="dev_pkg" type="elecom_pad.py" name="elecom_pad" output="screen"/>
+
+
+    <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_2_laserscan">
+        <remap from="/scan" to="/scan/depth" />
+        <remap from="/image" to="/camera/depth_registered/image_raw" />
+        <param name="scan_height" value="200" />
+    </node>
+
+	<node pkg="hokuyo_node" type="hokuyo_node" name="hokuyo_node" output="screen">
+		<remap from="/scan" to="/scan/lrf" />
+        <param name="port" value="/dev/ttyACM1" />                
+        <param name="frame_id" value="laser"/>
+	</node>
+
+	<node pkg="common_pkg" type="marge_scan.py" name="marge_scan" output="screen" />
+</launch>

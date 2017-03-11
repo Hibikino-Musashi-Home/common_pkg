@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#ELECOMパッド用ROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/03
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#joystickモジュールの初期化
+#PCに接続されているELECOMパッドのスキャン
+pygame.joystick.init()
+
+#Joystickオブジェクトの生成
+gamepad = pygame.joystick.Joystick()
+
+#Joystickオブジェクトの初期化
+#ELECOMパッドからの入力情報取得イベントを開始
+gamepad.init()
+
+
+#--------------------------------------------------
+#グローバル変数
+#--------------------------------------------------
+buttons = [0] * 12
+joys = [0] * 4
+
+
+#--------------------------------------------------
+#ELECOMパッドの情報を取得する関数
+#--------------------------------------------------
+def getf_pad():
+    global buttons, joys;
+
+    #ELECOMパッドから入力情報を取得
+    for event in pygame.event.get():
+        #ボタンが押された場合            
+        if event.type == pygame.locals.JOYBUTTONDOWN:
+            buttons[event.button] = 1
+        #ボタンが離された場合
+        elif event.type == pygame.locals.JOYBUTTONUP:
+            buttons[event.button] = 0
+        #ジョイスティックの入力があった場合        
+        elif event.type == pygame.locals.JOYAXISMOTION:
+            joys[0] = gamepad.get_axis(0)
+            joys[1] = gamepad.get_axis(1)
+            joys[2] = gamepad.get_axis(2)
+            joys[3] = gamepad.get_axis(3)
+
+
+#--------------------------------------------------
+#ELECOMパッドの情報をPublishする関数
+#--------------------------------------------------
+def pubf_elecom_pad():
+    global buttons, joys;
+
+    pub_elecom_pad = rospy.Publisher('/elecom_pad', Joy, queue_size = 1)
+
+    elecom_pad = Joy()
+
+    elecom_pad.buttons.append(buttons[0])
+    elecom_pad.buttons.append(buttons[1])
+    elecom_pad.buttons.append(buttons[2])
+    elecom_pad.buttons.append(buttons[3])
+    elecom_pad.buttons.append(buttons[4])
+    elecom_pad.buttons.append(buttons[5])
+    elecom_pad.buttons.append(buttons[6])
+    elecom_pad.buttons.append(buttons[7])
+    elecom_pad.buttons.append(buttons[8])
+    elecom_pad.buttons.append(buttons[9])
+    elecom_pad.buttons.append(buttons[10])
+    elecom_pad.buttons.append(buttons[11])
+    elecom_pad.axes.append(joys[0]) #左ジョイスティックのX軸(左右、数学軸)
+    elecom_pad.axes.append(joys[1]) #左ジョイスティックのY軸(下上、数学軸と逆転、注意)
+    elecom_pad.axes.append(joys[2]) #右ジョイスティックのX軸(左右、数学軸)
+    elecom_pad.axes.append(joys[3]) #右ジョイスティックのY軸(下上、数学軸と逆転、注意)
+
+    #ELECOMパッドのジョイスティックの座標
+    #横軸:X 縦軸:Y            
+    #    -1.0
+    #-1.0        1.0
+    #     1.0    
+
+    pub_elecom_pad.publish(elecom_pad)
+
+
+#--------------------------------------------------
+#メイン関数
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    #ELECOMパッドの情報を表示
+    try:
+        rospy.loginfo("ELECOM Name: " + gamepad.get_name())
+        rospy.loginfo("ELECOM Axis Num: " + str(gamepad.get_numaxes()))
+        rospy.loginfo("ELECOM pad Hats Num: " + str(gamepad.get_numhats()))
+        rospy.loginfo("ELECOM pad Buttons Num: " + str(gamepad.get_numbuttons()))
+    except pygame.error:
+        rospy.loginfo("There is no ELECOM pad")
+        sys.exit(1)
+
+    pygame.init() #インポートした全てのpygameモジュールの初期化
+
+    main_rate = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        getf_pad()
+        pubf_elecom_pad()
+        main_rate.sleep()

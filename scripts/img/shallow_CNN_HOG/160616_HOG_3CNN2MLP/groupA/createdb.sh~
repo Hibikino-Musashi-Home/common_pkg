@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+
+CAFFEROOT=~/caffe
+DBTYPE=lmdb
+
+#rm -rf train_$DBTYPE test_$DBTYPE
+#$CAFFEROOT/build/tools/convert_imageset.bin original/ original/train.txt train_$DBTYPE 1 -backend $DBTYPE
+#$CAFFEROOT/build/tools/convert_imageset.bin original/ original/test.txt test_$DBTYPE 1 -backend $DBTYPE
+
+$CAFFEROOT/build/tools/compute_image_mean.bin -backend=$DBTYPE train_2_$DBTYPE mean.binaryproto

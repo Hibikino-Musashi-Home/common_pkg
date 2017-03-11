@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+from common_param import *
+
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    #commonf_set_common_param()
+
+    #commonf_speech_single('おくちん')

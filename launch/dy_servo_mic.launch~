@@ -1,0 +1,30 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+    <node name="dynamixel_manager" pkg="dynamixel_controllers" type="controller_manager.py" required="true" output="screen">
+        <rosparam>
+            namespace: dxl_manager
+            serial_ports:
+                mic_pan_tilt_port:
+                    port_name: "/dev/ttyUSB1"
+                    baud_rate: 1000000
+                    min_motor_id: 1
+                    max_motor_id: 25
+                    update_rate: 30
+        </rosparam>
+    </node>
+
+    <rosparam file="$(find common_pkg)/params/dy_servo_mic_pan.yaml" command="load"/>
+    <node name="dy_servo_mic_pan" pkg="dynamixel_controllers" type="controller_spawner.py"
+          args="--manager=dxl_manager
+                --port mic_pan_tilt_port
+                dy_servo_mic_pan"
+          output="screen"/>
+
+    <rosparam file="$(find common_pkg)/params/dy_servo_mic_tilt.yaml" command="load"/>
+    <node name="dy_servo_mic_tilt" pkg="dynamixel_controllers" type="controller_spawner.py"
+          args="--manager=dxl_manager
+                --port mic_pan_tilt_port
+                dy_servo_mic_tilt"
+          output="screen"/>
+</launch>

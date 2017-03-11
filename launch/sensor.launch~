@@ -1,0 +1,22 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<include file="$(find openni2_launch)/launch/openni2.launch"/>
+
+
+    <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_2_laserscan">
+        <remap from="/scan" to="/scan/depth"/>
+        <remap from="/image" to="/camera/depth_registered/image_raw"/>
+        <param name="scan_height" value="200"/>
+    </node>
+
+
+	<node pkg="hokuyo_node" type="hokuyo_node" name="hokuyo_node" output="screen">
+		<remap from="/scan" to="/scan/lrf"/>
+        <param name="port" value="/dev/ttyACM0"/>                
+        <param name="frame_id" value="laser"/>
+	</node>
+
+
+	<node pkg="common_pkg" type="marge_scan.py" name="marge_scan" output="screen" />
+</launch>

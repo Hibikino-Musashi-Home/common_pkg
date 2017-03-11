@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+import os
+import sys 
+
+from subprocess import *
+
+argvs = sys.argv
+
+
+if __name__ == '__main__':
+    if argvs[1] == 'launch':
+        call(['aplay', '-q', (os.path.abspath(os.path.dirname(__file__)) + '/launch.wav')])

@@ -1,0 +1,16 @@
+#groupA
+#'Green_tea/', 'Cafe_au_lait/', 'Iced_tea/'
+
+net: "train_test.prototxt"
+test_iter: 100
+test_interval: 500
+base_lr: 0.0001
+momentum: 0.9
+weight_decay: 0.004
+lr_policy: "fixed"
+display: 100
+max_iter: 15000
+snapshot: 2500
+snapshot_format: HDF5
+snapshot_prefix: "model"
+solver_mode: GPU

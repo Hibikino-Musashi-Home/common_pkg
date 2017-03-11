@@ -1,0 +1,8 @@
+#goal
+string speech_rec_goal
+---
+#result
+bool speech_rec_result
+---
+#feedback
+string[] speech_rec_feedback

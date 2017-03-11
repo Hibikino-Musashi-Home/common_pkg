@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<node pkg="common_pkg" type="sound_effect.py" name="sound_effect" output="screen" />
+</launch>

@@ -1,0 +1,6 @@
+float64 cam_lift_goal
+---
+bool cam_lift_result
+---
+int64 cam_lift_feedback
+

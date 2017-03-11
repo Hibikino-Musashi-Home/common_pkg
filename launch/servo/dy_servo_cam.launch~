@@ -1,0 +1,35 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+    <node pkg="dynamixel_controllers" type="controller_manager.py" name="dynamixel_manager_cam" required="true" output="screen">
+        <rosparam>
+            namespace: dxl_manager
+            serial_ports:
+                cam_pan_tilt_port:
+                    port_name: "/dev/ttyUSB1"
+                    baud_rate: 1000000
+                    min_motor_id: 1
+                    max_motor_id: 25
+                    update_rate: 30
+        </rosparam>
+    </node>
+
+
+    <rosparam file="$(find common_pkg)/params/servo/dy_servo_cam_pan.yaml" command="load"/>
+    <node pkg="dynamixel_controllers" type="controller_spawner.py" name="dy_servo_cam_pan"
+          args="--manager=dxl_manager
+                --port cam_pan_tilt_port
+                dy_servo_cam_pan"
+          output="screen"/>
+
+
+    <rosparam file="$(find common_pkg)/params/servo/dy_servo_cam_tilt.yaml" command="load"/>
+    <node pkg="dynamixel_controllers" type="controller_spawner.py" name="dy_servo_cam_tilt"
+          args="--manager=dxl_manager
+                --port cam_pan_tilt_port
+                dy_servo_cam_tilt"
+          output="screen"/>
+
+
+    <node pkg="common_pkg" type="dy_servo_cam_ctrl.py" name="dy_servo_cam_ctrl" output="screen"/>
+</launch>

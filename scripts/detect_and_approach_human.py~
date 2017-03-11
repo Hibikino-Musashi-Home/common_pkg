@@ -1,0 +1,173 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#人を発見して近づくプログラム
+#
+#Hibikino-Musashi@Home
+#author: Yuta KIYAMA
+#date: 16/03/10
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#------------------------------------------------
+#------------------------------------------------
+MAXID=5 #トラッキングする最大人数
+DISTANCE_THERESHOLD=2.5 #判定距離
+PI=3.1415
+
+
+#------------------------------------------------
+#------------------------------------------------
+def cal_yaw(translationA,translationB):
+   x1=translationA[0]
+   y1=translationA[1]
+   x2=translationB[0]
+   y2=translationB[1]
+
+   if x2-x1>=0 and y2-y1 >=0:
+        return math.atan((y2-y1)/(x2-x1))
+   if x2-x1<=0 and y2-y1 >=0:
+        return math.atan((y2-y1)/(x2-x1))+PI
+   if x2-x1<=0 and y2-y1 <=0:
+        return math.atan((y2-y1)/(x2-x1))-PI
+   if x2-x1>=0 and y2-y1 <0:
+        return math.atan((y2-y1)/(x2-x1))
+
+
+#------------------------------------------------
+#------------------------------------------------
+def detectHumanInField(tf_head_translation):
+    #パラメータサーバーからフィールドの範囲を取得
+    #FIELD_MAX_X=n.getParam("/navigation/field/MAX_X");
+    #FIELD_MIN_X=n.getParam("/navigation/field/MIN_X");
+    #FIELD_MAX_Y=n.getParam("/navigation/field/MAX_Y");
+    #FIELD_MIN_Y=n.getParam("/navigation/field/MIN_Y");
+    FIELD_MAX_X=10
+    FIELD_MIN_X=-10
+    FIELD_MAX_Y=10
+    FIELD_MIN_Y=-10
+   
+    if tf_head_translation[0]<=FIELD_MAX_X and tf_head_translation[0]>=FIELD_MIN_X and tf_head_translation[1]<=FIELD_MAX_Y and tf_head_translation>=FIELD_MIN_Y:
+        return 1
+    else:
+        return 0
+
+
+#------------------------------------------------
+#------------------------------------------------
+class PanandMove_Thread():
+
+    def __init__(self):
+        self.stop_event=threading.Event()
+
+        self.thread=threading.Thread(target=self.target)
+        self.thread.setDaemon(True)
+        self.thread.start()
+
+    def target(self):
+        num_angle_loop=0
+        NUM_ANGLE_LOOP_MAX=450
+        while not self.stop_event.is_set():
+            num_angle_loop+=1
+            commonf_pubf_cam_pan(((num_angle_loop%90)-45)*PI/180)
+            if num_angle_loop > NUM_ANGLE_LOOP_MAX:
+                num_angle_loop=0 
+                commonf_pubf_cmd_vel(0,0,0,0,0,0) 
+            elif num_angle_loop == NUM_ANGLE_LOOP_MAX/5*1:
+                commonf_pubf_cmd_vel(0,0,0,0,0,0.15)                
+            elif num_angle_loop == NUM_ANGLE_LOOP_MAX/5*2:
+                commonf_pubf_cmd_vel(0,0,0,0,0,-0.15)
+            elif num_angle_loop == NUM_ANGLE_LOOP_MAX/5*3:
+                commonf_pubf_cmd_vel(0,0,0,0,0,0.15)
+            elif num_angle_loop == NUM_ANGLE_LOOP_MAX/5*4:
+                commonf_pubf_cmd_vel(0,0,0,0,0,-0.15)
+            time.sleep(0.1)
+
+    def stop(self):
+        commonf_pubf_cmd_vel(0,0,0,0,0,0.0)
+        commonf_pubf_cam_pan(0)
+        self.stop_event.set()
+        self.thread.join()
+
+
+#------------------------------------------------
+#------------------------------------------------        
+def findHuman(time_limit):
+    
+    tf_listener=tf.TransformListener()
+    Id_tfTracking = 0
+    Name_Tracking_head=""
+    time_deadline=rospy.Time.now()+time_limit
+    while not rospy.is_shutdown() and rospy.Time.now()<=time_deadline:
+ 
+        if Id_tfTracking <= MAXID:
+            Id_tfTracking+=1
+            Name_Tracking_head="head_"+str(Id_tfTracking)
+        else:
+            Id_tfTracking=0
+            Name_Tracking_head="head"
+        
+        try:
+            (map2headtrans,map2headrot)=tf_listener.lookupTransform("map", Name_Tracking_head, rospy.Time(0))
+            (camera2headtrans,camera2headrot)=tf_listener.lookupTransform("openni_depth_frame", Name_Tracking_head, rospy.Time(0))
+
+        except:
+            continue
+
+        if detectHumanInField(map2headtrans):#フィールド内にいる人か
+            if camera2headtrans[0]<=DISTANCE_THERESHOLD:#判定距離以内にいる人か
+                #ここに検出時の処理を記述
+                #人を見つけたらマップから見た頭座標を返す
+                rospy.loginfo("DETECT_HUMAN "+str(Id_tfTracking)) 
+                return map2headtrans
+
+    return 0
+
+
+#------------------------------------------------
+#------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    if rospy.get_param('/param/dbg/sm/flow') == 0 and rospy.get_param('/param/dbg/speech/onlyspeech') == 0: 
+        commonf_speech_single('人を探します。')
+
+        th=PanandMove_Thread()
+        map2headtrans=findHuman(rospy.Duration(60))
+        th.stop()
+        commonf_pubf_cam_pan(0)
+        commonf_pubf_cmd_vel(0,0,0,0,0,0)
+        if  map2headtrans:
+            commonf_speech_single('人を見つけたので近づきます。')
+
+            tf_listener=tf.TransformListener()
+
+            while not rospy.is_shutdown():
+                try:
+                    (map2basetrans,map2baserot)=tf_listener.lookupTransform("map","base_link", rospy.Time(0))
+                except Exception as e:
+                    #print 'type:'+str(type(e))
+                    #print 'args:'+str(e.args)
+                    #print 'message:'+e.message
+                    #rospy.sleep(1)
+                    continue
+            
+                rospy.loginfo("yaw"+str(cal_yaw(map2basetrans,map2headtrans)*180/PI))
+                commonf_actionf_move_base((map2basetrans[0]+map2headtrans[0])/2, (map2basetrans[1]+map2headtrans[1])/2,cal_yaw(map2basetrans,map2headtrans))
+                commonf_pubf_cmd_vel(0,0,0,0,0,0)
+                sys.exit(0)
+        else:
+            commonf_speech_single('人を見つけられませんでした。')
+            sys.exit(1)

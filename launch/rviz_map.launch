@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+
+<launch>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find common_pkg)/rviz_cfg/map.rviz" />
+</launch>

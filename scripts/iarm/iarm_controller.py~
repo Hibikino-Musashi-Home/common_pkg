@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#iARM通信用Windowsクライアントに制御命令を送るROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/03
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#--------------------------------------------------
+#定数
+#--------------------------------------------------
+#Windwosクライアントとソケット通信するための設定
+ROS_SERVER_IPADDR = '192.168.0.100' #ROSノードPCのIPアドレス
+ROS_SERVER_PORT = 60126 #ROSノードとWindowsクライアントで同じポート番号にする
+
+
+ros_server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+ros_server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+ros_server_sock.bind((ROS_SERVER_IPADDR, ROS_SERVER_PORT))
+ros_server_sock.listen(1)
+print '[INFO]: Connect to Windows client'
+client_sock, client_address = ros_server_sock.accept()
+print '[INFO]: Connect to Windows client SUCCESS'
+rospy.sleep(1)
+
+
+#--------------------------------------------------
+#iARM通信用Windowsクライアントと通信する関数
+#--------------------------------------------------
+def comm_iarm(iarm_snd_msg):
+    client_sock.sendall(iarm_snd_msg)
+
+    #制御が完了するまで待つ
+    iarm_rcv_params = ["", ""]
+    while iarm_rcv_params[0] != "s:iARMCtrl" and iarm_rcv_params[1] != "Comp:e":
+        iarm_rcv_msg = client_sock.recv(1024)
+        iarm_rcv_params = iarm_rcv_msg.split(',')
+        rospy.sleep(0.05)
+
+
+#--------------------------------------------------
+#iARM用Actionクラス
+#--------------------------------------------------
+class iARM(object):
+    def __init__(self):
+        self._iarm_action_server = actionlib.SimpleActionServer('iarm_action', iARMAction, execute_cb = self.iarm)
+        self._iarm_action_server.start()
+        
+
+    def iarm(self, goal):
+        comm_iarm(goal.iarm_goal)
+
+        result = iARMResult(iarm_result = True)
+        self._iarm_action_server.set_succeeded(result)
+
+
+#--------------------------------------------------
+#メイン関数
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    #commonf_speech_single('アームを閉じます。注意してください。')
+
+    comm_iarm('s:iARMCtrl,EndOpening,0,0.2:e')
+    comm_iarm('s:iARMCtrl,KeyCmd,i:e')
+    comm_iarm('s:iARMCtrl,JointAng,-1.57,0,0,0,0,0,0.785,0,0,0,0,0:e')
+
+    iarm = iARM()
+
+    main_rate = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        if commonf_get_key() == '8':
+            #commonf_speech_single('アームを閉じます。注意してください。')
+
+            comm_iarm('s:iARMCtrl,EndOpening,0,0.2:e')
+            comm_iarm('s:iARMCtrl,KeyCmd,i:e')
+            comm_iarm('s:iARMCtrl,JointAng,-1.57,0,0,0,0,0,0.785,0,0,0,0,0:e')
+        if commonf_get_key() == 'o':
+            #commonf_speech_single('アームを開きます。注意してください。')
+
+            comm_iarm('s:iARMCtrl,KeyCmd,o:e')
+            comm_iarm('s:iARMCtrl,EndOpening,1,0.2:e')            
+        if commonf_get_key() == '9':
+            #commonf_speech_single('アームを閉じて電源を切ります。注意してください。')
+
+            comm_iarm('s:iARMCtrl,EndOpening,0,0.2:e')
+            comm_iarm('s:iARMCtrl,KeyCmd,i:e')
+            comm_iarm('s:iARMCtrl,JointAng,-1.57,0,0,0,0,0,0.785,0,0,0,0,0:e')
+            comm_iarm('s:iARMCtrl,KeyCmd,27:e')
+
+            sys.exit(0)
+
+        main_rate.sleep()

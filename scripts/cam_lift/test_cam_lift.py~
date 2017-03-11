@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+import rospy
+
+import actionlib
+
+from common_pkg.msg import CamLiftAction
+from common_pkg.msg import CamLiftGoal 
+
+import os
+import sys
+
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+
+    cam_lift_action_client = actionlib.SimpleActionClient('cam_lift_action', CamLiftAction)
+    cam_lift_action_client.wait_for_server()
+
+    goal = CamLiftGoal()
+    goal.cam_lift_goal = 0.000
+    cam_lift_action_client.send_goal(goal)
+
+    cam_lift_action_client.wait_for_result()
+
+    print 'hoge'
+
+    goal.cam_lift_goal = 0.255
+    cam_lift_action_client.send_goal(goal)
+
+    cam_lift_action_client.wait_for_result()
+
+    print 'hoge'
+
+    while not rospy.is_shutdown():
+        rospy.spin()

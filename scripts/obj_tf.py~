@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import rospy
+
+import tf
+
+import os
+import sys
+
+from subprocess import *
+
+
+#音声合成を現スレッドで起動(喋り終わるまで待つ)
+#半角文字は英語、全角文字は日本語で喋ります
+#例: speech_single('This is English test message.これは日本語のテストメッセージです。')
+def speech_single(speech_str):
+    if rospy.get_param('/param/dbg/speech/ssynlog') == 1:
+        rospy.loginfo(speech_str)
+    if rospy.get_param('/param/dbg/sm/flow') == 0:
+        call(['rosrun', 'common_pkg', 'speech_syn.py', speech_str])
+
+
+#音声合成を他スレッドで起動
+#半角文字は英語、全角文字は日本語で喋ります
+#例: SpeechMuiti('This is English test message.これは日本語のテストメッセージです。')
+def speech_multi(speech_str):
+    if rospy.get_param('/param/dbg/speech/ssynlog') == 1:
+        rospy.loginfo(speech_str)
+    if rospy.get_param('/param/dbg/sm/flow') == 0:
+        Popen(['rosrun', 'common_pkg', 'speech_syn.py', speech_str])
+
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    obj_x = rospy.get_param('/param/obj/pos/x')
+    obj_y = rospy.get_param('/param/obj/pos/y')
+    obj_z = rospy.get_param('/param/obj/pos/z')
+
+    tf_listener = tf.TransformListener()
+
+    if rospy.get_param('/param/dbg/sm/flow') == 0 and rospy.get_param('/param/dbg/speech/onlyspeech') == 0:        
+        while not rospy.is_shutdown():
+            try:
+                (translation, rotation) = tf_listener.lookupTransform('base_link', 'obj', rospy.Time(0))
+            except: 
+                print 'hoge'
+                camera_depth_optical_frame2obj = tf.TransformBroadcaster()
+                camera_depth_optical_frame2obj.sendTransform((obj_x, obj_y, obj_z),tf.transformations.quaternion_from_euler(0, 0, 0), rospy.Time.now(), "obj", "camera_depth_optical_frame")
+                continue
+
+            print 'x:' + translation[0]
+            print 'y:' + translation[1]
+            print 'z:' + translation[2]
+
+            sys.exit()

@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#iARMビジュアルフィードバックROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/03
+#--------------------------------------------------
+
+
+import rospy
+
+import tf
+
+import actionlib
+
+from common_pkg.msg import iARMAction
+from common_pkg.msg import iARMGoal 
+
+import os
+import sys
+
+from subprocess import *
+
+
+#--------------------------------------------------
+#音声合成を現スレッドで起動(喋り終わるまで待つ)
+#半角文字は英語、全角文字は日本語で喋る
+#例: speech_single('This is English test message.これは日本語のテストメッセージです。')
+#--------------------------------------------------
+def speech_single(speech_str):
+    if rospy.get_param('/param/dbg/speech/ssynlog') == 1:
+        rospy.loginfo(speech_str)
+    if rospy.get_param('/param/dbg/sm/flow') == 0:
+        call(['rosrun', 'common_pkg', 'speech_syn.py', speech_str])
+
+
+#--------------------------------------------------
+#音声合成を現スレッドで起動(喋り終わるまで待つ)
+#半角文字は英語、全角文字は日本語で喋る
+#例: speech_single('This is English test message.これは日本語のテストメッセージです。')
+#--------------------------------------------------
+def speech_multi(speech_str):
+    if rospy.get_param('/param/dbg/speech/ssynlog') == 1:
+        rospy.loginfo(speech_str)
+    if rospy.get_param('/param/dbg/sm/flow') == 0:
+        Popen(['rosrun', 'common_pkg', 'speech_syn.py', speech_str])
+
+
+#--------------------------------------------------
+#メイン関数
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    obj_pos = {'x':0.0, 'y':0.0, 'z':0.0}
+    obj_pos['x'] = rospy.get_param('/param/obj/pos/x')
+    obj_pos['y'] = rospy.get_param('/param/obj/pos/y')
+    obj_pos['z'] = rospy.get_param('/param/obj/pos/z')
+
+    tf_listener = tf.TransformListener()
+
+    if rospy.get_param('/param/dbg/sm/flow') == 0 and rospy.get_param('/param/dbg/speech/onlyspeech') == 0:        
+        while not rospy.is_shutdown():
+            try:
+                (translation, rotation) = tf_listener.lookupTransform('base_link', 'obj', rospy.Time(0))
+            except: 
+                camera_depth_optical_frame2obj = tf.TransformBroadcaster()
+                camera_depth_optical_frame2obj.sendTransform((obj_pos['x'], obj_pos['y'], obj_pos['z']),tf.transformations.quaternion_from_euler(0, 0, 0), rospy.Time.now(), "obj", "camera_depth_optical_frame")
+                continue
+
+            obj_pos['x'] = translation[0] + 0.05
+            obj_pos['y'] = translation[1] - 0.1
+            obj_pos['z'] = translation[2]
+
+            iarm_action_client = actionlib.SimpleActionClient('iarm_action', iARMAction)
+            iarm_action_client.wait_for_server()
+
+            goal = iARMGoal()
+
+            goal.iarm_goal = 'iARMCtrl,EndOpening,0,0.2X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 'iARMCtrl,KeyCmd,oX'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 'iARMCtrl,EndOpening,1,0.2X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            #左移動
+            goal.iarm_goal = 'iARMCtrl,CarDis,-150,0,0,0,0,0,300,0,0,0,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            #前移動
+            goal.iarm_goal = 'iARMCtrl,CarDis,0,200,0,0,0,0,0,300,0,0,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            #下移動
+            goal.iarm_goal = 'iARMCtrl,CarDis,0,0,-200,0,0,0,0,0,300,0,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+
+            end_vel = {'x':1.0, 'y':1.0, 'z':1.0}
+
+            while end_vel['x'] != 0 or end_vel['y'] != 0 or end_vel['z'] != 0:
+                try:
+                    (translation, rotation) = tf_listener.lookupTransform('base_link', 'ar_marker_8', rospy.Time(0))
+                except:
+                    continue
+
+                end_vel['x'] = 0
+                end_vel['y'] = 0
+                end_vel['z'] = 0
+
+                if abs(obj_pos['x'] - translation[0]) > 0.01:
+                    if obj_pos['x'] < translation[0]:
+                        end_vel['y'] = -10
+                    else:
+                        end_vel['y'] = 10
+                if abs(obj_pos['y'] - translation[1]) > 0.01:
+                    if obj_pos['y'] < translation[1]:
+                        end_vel['x'] = 10
+                    else:
+                        end_vel['x'] = -10
+
+                goal.iarm_goal = 'iARMCtrl,CarVel,' + str(end_vel['x']) + ',' + str(end_vel['y']) + ',' + str(end_vel['z']) + ',0,0,0X'
+
+                iarm_action_client.send_goal(goal)
+                iarm_action_client.wait_for_result()
+
+                if rospy.is_shutdown():
+                    goal.iarm_goal = 'iARMCtrl,KeyCmd,27X'
+                    iarm_action_client.send_goal(goal)
+                    iarm_action_client.wait_for_result()
+                    sys.exit()
+
+
+            goal.iarm_goal = 'iARMCtrl,EndOpening,0.8,0.2X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 'iARMCtrl,CarDis,0,0,100,0,0,0,0,0,300,0,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+#            goal.iarm_goal = 'iARMCtrl,EndOpening,1,0.2X'
+#            iarm_action_client.send_goal(goal)
+#            iarm_action_client.wait_for_result()
+
+#            goal.iarm_goal = 'iARMCtrl,KeyCmd,oX'
+#            iarm_action_client.send_goal(goal)
+#            iarm_action_client.wait_for_result()
+
+#            goal.iarm_goal = 'iARMCtrl,KeyCmd,iX'
+#            iarm_action_client.send_goal(goal)
+#            iarm_action_client.wait_for_result()
+
+#            goal.iarm_goal = 'iARMCtrl,KeyCmd,27X'
+#            iarm_action_client.send_goal(goal)
+#            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 'iARMCtrl,CarDis,0,0,0,1.6,0,0,0,0,0,2,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 'iARMCtrl,CarDis,-375,170,-330,0,0,0,300,300,300,0,0,0X'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            sys.exit()
+
+

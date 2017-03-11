@@ -1,0 +1,103 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import rospy
+
+import cv2
+import numpy as np
+import skimage.data
+
+import caffe
+from caffe.proto import caffe_pb2
+
+import actionlib
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
+
+from dev_arm_pkg.msg import ObjRecAction
+from dev_arm_pkg.msg import ObjRecFeedback
+from dev_arm_pkg.msg import ObjRecResult
+
+import os
+import sys
+
+from subprocess import *
+
+
+#array for detected image
+croped_width   = 224
+croped_height  = 224
+
+names = [
+	'premium_molts/',
+    'asahi/',
+    'nodogoshi/',
+    'kirin/'
+]
+
+class ObjRec(object):
+    def __init__(self):
+        
+        self._obj_rec_action_server = actionlib.SimpleActionServer('obj_rec_action', ObjRecAction, execute_cb = self.obj_rec)
+        self._obj_rec_action_server.start()
+        self._cv_bridge = CvBridge()
+        
+        #caffe classifier of shape
+        learned_path    = os.path.abspath(os.path.dirname(__file__)) + '/learned_beer/'
+        
+        caffe.set_mode_gpu()
+        prototxt_path   = learned_path + 'const.prototxt'
+        caffemodel_path = learned_path + 'model.caffemodel'
+        self.classifier = caffe.Classifier(prototxt_path, caffemodel_path, raw_scale = 255, channel_swap = (2, 1, 0))
+
+    
+    def obj_rec(self, goal):      
+        goal.obj_rec_goal.encoding = 'bgr8'
+
+        #convert image
+        cv2img = self._cv_bridge.imgmsg_to_cv2(goal.obj_rec_goal, 'bgr8')
+        cv2img_array = np.array(cv2img, dtype = np.uint8)
+        cv2.normalize(cv2img_array, cv2img_array, 0, 255, cv2.NORM_MINMAX)
+
+        #resize image
+        image = cv2.resize(cv2img_array, (croped_width, croped_height))  
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = skimage.img_as_float(image).astype(np.float32)
+        
+        out   = self.classifier.predict([image], oversample = False)
+        pred  = np.argmax(out)
+
+        print names[pred]
+
+        result = ObjRecResult(obj_rec_result = pred + 1 + 15)
+        print result
+        self._obj_rec_action_server.set_succeeded(result)
+    
+    '''
+    def obj_rec_dammy(self, img):
+        image = cv2.resize(img, (croped_width, croped_height))  
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = skimage.img_as_float(image).astype(np.float32)
+
+        out = self.classifier.predict([image], oversample = False)
+        pred = np.argmax(out)
+
+        print names[pred]
+    '''
+
+if __name__ == '__main__':
+    
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+    
+    obj_rec = ObjRec()
+    '''
+    img_dir = ''
+    for i in range(0, 2700):
+        img = cv2.imread(img_dir + names[0] + str(i) + '.jpg')    
+        obj_rec.obj_rec_dammy(img)
+    '''   
+    r = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        r.sleep()

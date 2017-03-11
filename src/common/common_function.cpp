@@ -1,0 +1,192 @@
+//--------------------------------------------------
+//C++共通関数
+//
+//author: Yutaro ISHIDA
+//date: 16/03/14
+//--------------------------------------------------
+
+
+#include <common_pkg/common_include.h>
+#include <common_pkg/common_function.h>
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+CommonFunction::CommonFunction(ros::NodeHandle nh_){
+    pub_scan_mode = nh_.advertise<std_msgs::String>("/scan/mode", 1);
+
+    pub_cam_pan_angle = nh_.advertise<std_msgs::Float64>("/dy_servo_cam_pan/angle", 1);
+    pub_cam_tilt_angle = nh_.advertise<std_msgs::Float64>("/dy_servo_cam_tilt/angle", 1);
+
+    pub_mic_pan_angle = nh_.advertise<std_msgs::Float64>("/dy_servo_mic_pan/angle", 1);
+    pub_mic_tilt_angle = nh_.advertise<std_msgs::Float64>("/dy_servo_mic_tilt/angle", 1);
+
+    pub_cmd_vel = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+CommonFunction::~CommonFunction(){
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_actionf_speech_single(ros::NodeHandle nh_, string speech_str){
+    int dbg_speech_ssynlog;
+    nh_.getParam("/param/dbg/speech/ssynlog", dbg_speech_ssynlog);
+    if(dbg_speech_ssynlog == 1){
+        ROS_INFO("%s\n", speech_str.c_str());
+    }
+
+    int dbg_sm_flow;
+    nh_.getParam("/param/dbg/sm/flow", dbg_sm_flow);
+    if(dbg_sm_flow == 0){
+        actionlib::SimpleActionClient<common_pkg::SpeechSynAction> speech_syn_action("speech_syn_action", true);
+        speech_syn_action.waitForServer();
+    
+        common_pkg::SpeechSynGoal goal;
+        goal.speech_syn_goal = speech_str;
+        speech_syn_action.sendGoal(goal);
+        speech_syn_action.waitForResult();
+    }
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_actionf_speech_multi(ros::NodeHandle nh_, string speech_str){
+    int dbg_speech_ssynlog;
+    nh_.getParam("/param/dbg/speech/ssynlog", dbg_speech_ssynlog);
+    if(dbg_speech_ssynlog == 1){
+        ROS_INFO("%s\n", speech_str.c_str());
+    }
+
+    int dbg_sm_flow;
+    nh_.getParam("/param/dbg/sm/flow", dbg_sm_flow);
+    if(dbg_sm_flow == 0){
+        actionlib::SimpleActionClient<common_pkg::SpeechSynAction> speech_syn_action("speech_syn_action", true);
+        speech_syn_action.waitForServer();
+    
+        common_pkg::SpeechSynGoal goal;
+        goal.speech_syn_goal = speech_str;
+        speech_syn_action.sendGoal(goal);
+        //speech_syn_action.waitForResult();
+    }
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_actionf_sound_effect_single(ros::NodeHandle nh_, string sound_effect_goal){
+    int dbg_sm_flow;
+    nh_.getParam("/param/dbg/sm/flow", dbg_sm_flow);
+    if(dbg_sm_flow == 0){
+        actionlib::SimpleActionClient<common_pkg::SoundEffectAction> sound_effect_action("sound_effect_action", true);
+        sound_effect_action.waitForServer();
+    
+        common_pkg::SoundEffectGoal goal;
+        goal.sound_effect_goal = sound_effect_goal;
+        sound_effect_action.sendGoal(goal);
+        sound_effect_action.waitForResult();
+    }
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_actionf_sound_effect_multi(ros::NodeHandle nh_, string sound_effect_goal){
+    int dbg_sm_flow;
+    nh_.getParam("/param/dbg/sm/flow", dbg_sm_flow);
+    if(dbg_sm_flow == 0){
+        actionlib::SimpleActionClient<common_pkg::SoundEffectAction> sound_effect_action("sound_effect_action", true);
+        sound_effect_action.waitForServer();
+    
+        common_pkg::SoundEffectGoal goal;
+        goal.sound_effect_goal = sound_effect_goal;
+        sound_effect_action.sendGoal(goal);
+        //sound_effect_action.waitForResult();
+    }
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_actionf_cam_lift(ros::NodeHandle nh_, double cam_lift_goal){
+    int dbg_sm_flow_;
+    nh_.getParam("/param/dbg/sm/flow", dbg_sm_flow_);
+    int dbg_speech_onlyspeech_;
+    nh_.getParam("/param/dbg/speech/onlyspeech", dbg_speech_onlyspeech_);
+    if(dbg_sm_flow_ == 1 || dbg_speech_onlyspeech_ == 1){
+        exit(0);
+    }
+
+    actionlib::SimpleActionClient<common_pkg::CamLiftAction> cam_lift_action("cam_lift_action", true);    
+    cam_lift_action.waitForServer();
+
+    common_pkg::CamLiftGoal goal;
+    goal.cam_lift_goal = cam_lift_goal;
+    cam_lift_action.sendGoal(goal);
+    cam_lift_action.waitForResult();
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_scan_mode(ros::NodeHandle nh_, string in_scan_mode){
+    std_msgs::String out_scan_mode;
+    out_scan_mode.data = in_scan_mode;
+    pub_scan_mode.publish(out_scan_mode);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_cam_pan(ros::NodeHandle nh_, double in_cam_pan_angle){
+    std_msgs::Float64 out_cam_pan_angle;
+    out_cam_pan_angle.data = in_cam_pan_angle;
+    pub_cam_pan_angle.publish(out_cam_pan_angle);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_cam_tilt(ros::NodeHandle nh_, double in_cam_tilt_angle){
+    std_msgs::Float64 out_cam_tilt_angle;
+    out_cam_tilt_angle.data = in_cam_tilt_angle;
+    pub_cam_tilt_angle.publish(out_cam_tilt_angle);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_mic_pan(ros::NodeHandle nh_, double in_mic_pan_angle){
+    std_msgs::Float64 out_mic_pan_angle;
+    out_mic_pan_angle.data = in_mic_pan_angle;
+    pub_mic_pan_angle.publish(out_mic_pan_angle);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_mic_tilt(ros::NodeHandle nh_, double in_mic_tilt_angle){
+    std_msgs::Float64 out_mic_tilt_angle;
+    out_mic_tilt_angle.data = in_mic_tilt_angle;
+    pub_mic_tilt_angle.publish(out_mic_tilt_angle);
+}
+
+
+//--------------------------------------------------
+//--------------------------------------------------
+void CommonFunction::commonf_pubf_cmd_vel(ros::NodeHandle nh, double linear_x, double linear_y, double linear_z, double angular_x, double angular_y, double angular_z){
+    geometry_msgs::Twist cmd_vel;
+    cmd_vel.linear.x = linear_x;
+    cmd_vel.linear.y = linear_y;
+    cmd_vel.linear.z = linear_z;
+    cmd_vel.angular.x = angular_x;   
+    cmd_vel.angular.y = angular_y;
+    cmd_vel.angular.z = angular_z;
+
+    pub_cmd_vel.publish(cmd_vel);
+}

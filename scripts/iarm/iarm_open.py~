@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#iARM展開ROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/03
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#--------------------------------------------------
+#メイン関数
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    if rospy.get_param('/param/dbg/sm/flow') == 0 and rospy.get_param('/param/dbg/speech/onlyspeech') == 0:
+        commonf_speech_multi('アームを開きます。')
+
+        main_rate = rospy.Rate(30)
+        while not rospy.is_shutdown():        
+            iarm_action_client = actionlib.SimpleActionClient('iarm_action', iARMAction)
+            iarm_action_client.wait_for_server()
+
+            goal = iARMGoal()
+
+
+            goal.iarm_goal = 's:iARMCtrl,KeyCmd,o:e'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+            goal.iarm_goal = 's:iARMCtrl,EndOpening,1.0,0.2:e'
+            iarm_action_client.send_goal(goal)
+            iarm_action_client.wait_for_result()
+
+
+            commonf_speech_multi('アームを開きました。')
+
+            sys.exit(0)
+
+            main_rate.sleep()

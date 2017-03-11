@@ -1,0 +1,6 @@
+string iarm_goal
+---
+bool iarm_result
+---
+bool iarm_feedback
+

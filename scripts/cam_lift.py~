@@ -1,0 +1,110 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+import rospy
+
+import actionlib
+
+from common_pkg.msg import CamLiftAction
+from common_pkg.msg import CamLiftFeedback
+from common_pkg.msg import CamLiftResult
+
+from std_msgs.msg import Int64
+from std_msgs.msg import Bool
+from std_msgs.msg import Empty
+
+import os
+import sys
+
+
+enc = 0
+upper_sw = 1
+lower_sw = 1
+
+
+def subf_enc(sub_enc):
+    global enc
+    enc = sub_enc.data
+
+
+def subf_upper_sw(sub_upper_sw):
+    global upper_sw
+    upper_sw = sub_upper_sw.data
+
+
+def subf_lower_sw(sub_lower_sw):
+    global lower_sw
+    lower_sw = sub_lower_sw.data
+
+
+class CamLift(object):
+    def __init__(self):
+        self._cam_lift_action_server = actionlib.SimpleActionServer('cam_lift_action', CamLiftAction, execute_cb = self.cam_lift)
+        self._cam_lift_action_server.start()
+        self._pub_speed = rospy.Publisher('/cam_lift/speed', Int64, queue_size = 1)
+
+    def cam_lift(self, goal):
+        global enc, upper_sw, lower_sw
+
+        if goal.cam_lift_goal == 555:
+            print 'upper'
+
+            #upperまで移動
+            self._pub_speed.publish(400)
+            print upper_sw
+            while upper_sw == True:
+                    print upper_sw                
+            self._pub_speed.publish(0)
+
+            print 'stop'
+
+            result = CamLiftResult(cam_lift_result = True)
+            self._cam_lift_action_server.set_succeeded(result)
+        elif goal.cam_lift_goal == 0:
+            print 'lower'
+
+            #lowerまで移動
+            self._pub_speed.publish(-400)
+            while lower_sw == True:
+                    pass                
+            self._pub_speed.publish(0)
+
+            result = CamLiftResult(cam_lift_result = True)
+            self._cam_lift_action_server.set_succeeded(result)
+        elif goal.cam_lift_goal > 0 and goal.cam_lift_goal < 555:
+            print 'enc'            
+
+            if goal.cam_lift_goal > enc * (555 / 84): #上昇する時                
+                self._pub_speed.publish(400)
+                while goal.cam_lift_goal > enc * (555 / 84):
+                    pass                
+                self._pub_speed.publish(0)
+            elif goal.cam_lift_goal < enc * (555 / 84): #下降する時                
+                self._pub_speed.publish(-400)
+                while goal.cam_lift_goal < enc * (555 / 84):
+                    pass                
+                self._pub_speed.publish(0)
+
+            result = CamLiftResult(cam_lift_result = True)
+            self._cam_lift_action_server.set_succeeded(result)
+        else:
+            print 'else'
+
+            result = CamLiftResult(cam_lift_result = False)
+            self._cam_lift_action_server.set_succeeded(result)
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    rospy.Subscriber("/cam_lift/enc", Int64, subf_enc)
+    rospy.Subscriber("/cam_lift/upper_sw", Bool, subf_upper_sw)
+    rospy.Subscriber("/cam_lift/lower_sw", Bool, subf_lower_sw)
+        
+    cam_lift = CamLift()
+
+    r = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        r.sleep()

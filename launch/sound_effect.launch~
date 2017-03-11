@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<node pkg="common_pkg" type="speech_syn.py" name="speech_syn" output="screen" />
+</launch>

@@ -1,0 +1,254 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+#--------------------------------------------------
+#新型EXIA台車PIC基板通信用Windowsクライアントに制御命令を送るROSノード
+#
+#author: Yutaro ISHIDA
+#date: 16/03/03
+#
+#memo:
+#新型EXIA台車PIC基板通信用Windowsクライアントとペアで使用
+#
+#ROSノード(制御命令を生成)
+#↓ソケット通信
+#Windowsクライアント(EXIA台車と通信)
+#↓シリアル通信
+#EXIA台車
+#
+#EXIA台車制御命令
+#速度送信: V,x,y,yaw
+#速度受信: v,x,y,yaw
+#オドメトリ送信: P
+#オドメトリ受信: p,x,y,yaw
+#
+#EXIA台車座標
+#x: プラス(後退) マイナス(前進)
+#y: プラス(左進) マイナス(右進)
+#yaw: プラス(反時計回り) マイナス(時計回り)
+#--------------------------------------------------
+
+
+import sys
+import roslib
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts/common')
+
+from common_import import *
+from common_function import *
+
+
+#--------------------------------------------------
+#定数
+#--------------------------------------------------
+#Windwosクライアントとソケット通信するための設定
+ROS_SERVER_IPADDR = '192.168.0.100' #ROSノードPCのIPアドレス
+ROS_SERVER_PORT = 60124 #ROSノードとWindowsクライアントで同じポート番号にする
+
+RAD2DEG = 180 / 3.14 #[rad]から[deg]に変換
+DEG2RAD = 3.14 / 180 #[deg]から[rad]に変換
+m2mm = 1000 #[m]から[mm]に変換
+mm2m = 0.001 #[mm]から[m]に変換
+
+
+#--------------------------------------------------
+#グローバル変数
+#--------------------------------------------------
+buttons = [0] * 12 #ゲームパッドのボタン情報
+joys = [0] * 4 #ゲームパッドのジョイスティック情報
+
+#cmd_vel(速度トピック)の情報
+v_linear_cmd_vel = {'x':0, 'y':0, 'z':0}
+v_angular_cmd_vel = {'x':0, 'y':0, 'z':0}
+
+#ELECOMパッド操作の速度調整機能の初期値
+v_linear_pad = {'x':108, 'y': 54, 'z':108} #[mm/s] EXIA台車限界700[mm/s]
+v_angular_pad = {'x':9, 'y': 9, 'z':9} #[mm/s] EXIA台車限界80[deg/s]
+
+exia_snd_mess_count = 0
+
+exia_snd_mess = {'v':'s:V,0,0,0:e', 'p':'s:P:e'}
+exia_rcv_mess = {'v':'s:v,0,0,0:e', 'p':'s:p,0,0,0:e'}
+
+
+ros_server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+ros_server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+ros_server_sock.bind((ROS_SERVER_IPADDR, ROS_SERVER_PORT))
+ros_server_sock.settimeout(100)
+ros_server_sock.listen(1)
+print '[INFO]: Connect to Windows client'
+win_client_sock, win_client_address = ros_server_sock.accept()
+print '[INFO]: Connect to Windows client SUCCESS'
+
+
+#--------------------------------------------------
+#ELECOMパッドのSubscribe関数
+#--------------------------------------------------
+def subf_elecom_pad(sub_elecom_pad):
+    global buttons, joys
+
+    buttons[0] = sub_elecom_pad.buttons[0] #ELECOMパッド上の1
+    buttons[1] = sub_elecom_pad.buttons[1] #ELECOMパッド上の2
+    buttons[2] = sub_elecom_pad.buttons[2] #ELECOMパッド上の3
+    buttons[3] = sub_elecom_pad.buttons[3] #ELECOMパッド上の3
+    buttons[4] = sub_elecom_pad.buttons[4] #ELECOMパッド上の5
+    buttons[5] = sub_elecom_pad.buttons[5] #ELECOMパッド上の6
+    buttons[6] = sub_elecom_pad.buttons[6] #ELECOMパッド上の7
+    buttons[7] = sub_elecom_pad.buttons[7] #ELECOMパッド上の8
+    buttons[8] = sub_elecom_pad.buttons[8] #ELECOMパッド上の9
+    buttons[9] = sub_elecom_pad.buttons[9] #ELECOMパッド上の10
+    buttons[10] = sub_elecom_pad.buttons[10] #ELECOMパッド上の11
+    buttons[11] = sub_elecom_pad.buttons[11] #ELECOMパッド上の12
+    joys[0] = sub_elecom_pad.axes[0] #ELECOMパッド左ジョイスティック左右
+    joys[1] = sub_elecom_pad.axes[1] #ELECOMパッド左ジョイスティック下上(逆転注意)
+    joys[2] = sub_elecom_pad.axes[2] #ELECOMパッド右ジョイスティック左右
+    joys[3] = sub_elecom_pad.axes[3] #ELECOMパッド右ジョイスティック下上(逆転注意)
+
+
+#--------------------------------------------------
+#cmd_vel(速度トピック)のSubscribe関数
+#--------------------------------------------------
+def subf_cmd_vel(cmd_vel):
+    global linear, angular
+
+    v_linear_cmd_vel['x'] = cmd_vel.linear.x
+    v_linear_cmd_vel['y'] = cmd_vel.linear.y
+    v_linear_cmd_vel['z'] = cmd_vel.linear.z
+    v_angular_cmd_vel['x'] = cmd_vel.angular.x
+    v_angular_cmd_vel['y'] = cmd_vel.angular.y
+    v_angular_cmd_vel['z'] = cmd_vel.angular.z
+
+
+#--------------------------------------------------
+#制御命令を生成しWindowsクライアントと通信する関数
+#--------------------------------------------------
+def comm_exia():
+    global exia_snd_mess_count, buttons, joys, v_linear_pad, v_angular_pad, v_linear_cmd_vel, v_angular_cmd_vel, exia_snd_mess, exia_rcv_mess
+
+    if exia_snd_mess_count < 4:
+        exia_snd_mess_count = exia_snd_mess_count + 1
+
+        v_linear_snd_mess = {'x':0, 'y':0, 'z':0}
+        v_angular_snd_mess = {'x':0, 'y':0, 'z':0}
+
+        #ELECOMパッドによる停止
+        if buttons[0] == 1:
+            v_linear_snd_mess['x'] = 0
+            v_linear_snd_mess['y'] = 0
+            v_angular_snd_mess['z'] = 0
+        #ELECOMパッドによる操作
+        elif buttons[2] == 1:
+            #速度調整機能
+            if buttons[6] == 1:
+                if v_linear_pad['x'] < 360:
+                    v_linear_pad['x'] = v_linear_pad['x'] + 36
+                if v_linear_pad['y'] < 180:
+                    v_linear_pad['y'] = v_linear_pad['y'] + 18
+                if v_angular_pad['z'] < 30:
+                    v_angular_pad['z'] = v_angular_pad['z'] + 3
+            if buttons[7] == 1:
+                if v_linear_pad['x'] > 0:
+                    v_linear_pad['x'] = v_linear_pad['x'] - 36
+                if v_linear_pad['y'] > 0:
+                    v_linear_pad['y'] = v_linear_pad['y'] - 18
+                if v_angular_pad['z'] > 0:
+                    v_angular_pad['z'] = v_angular_pad['z'] - 3
+
+            #並進運動命令の生成
+            if abs(joys[1]) > 0.05:
+                v_linear_snd_mess['x'] = joys[1] * v_linear_pad['x']
+            if abs(joys[0]) > 0.05:
+                v_linear_snd_mess['y'] = joys[0] * v_linear_pad['y'] * -1 
+
+            #回転運動命令の生成
+            if buttons[4] == 0:
+                if buttons[5] == 0:
+                    v_angular_snd_mess['z'] = 0
+                else:
+                    v_angular_snd_mess['z'] = v_angular_pad['z'] * -1
+            else:
+                if buttons[5] == 0:
+                    v_angular_snd_mess['z'] = v_angular_pad['z']
+                else:
+                    v_angular_snd_mess['z'] = 0
+        #cmd_vel(速度トピック)による操作
+        elif abs(v_linear_cmd_vel['x']) > 0.005 or abs(v_linear_cmd_vel['y']) > 0.005 or abs(v_angular_cmd_vel['z']) > 0.087:
+            v_linear_snd_mess['x'] = v_linear_cmd_vel['x'] * m2mm * -1
+            v_linear_snd_mess['y'] = v_linear_cmd_vel['y'] * m2mm
+            v_angular_snd_mess['z'] = v_angular_cmd_vel['z'] * RAD2DEG
+
+        #小数点以下1桁に丸める(四捨五入)
+        v_linear_snd_mess['x'] = round(v_linear_snd_mess['x'], 1)
+        v_linear_snd_mess['y'] = round(v_linear_snd_mess['y'], 1)
+        v_angular_snd_mess['z'] = round(v_angular_snd_mess['z'], 1)
+
+        exia_snd_mess['v'] = 's:V,' + str(v_linear_snd_mess['x']) + ',' + str(v_linear_snd_mess['y']) + ',' + str(v_angular_snd_mess['z']) + ':e'
+
+        win_client_sock.sendall(exia_snd_mess['v'])
+        try:
+            exia_rcv_mess['v'] = win_client_sock.recv(1024)
+        except socket.timeout:
+            return
+    else:
+        exia_snd_mess_count = 0
+
+        exia_snd_mess['p'] = 's:P:e'
+
+        win_client_sock.sendall(exia_snd_mess['p'])
+        try:
+            exia_rcv_mess['p'] = win_client_sock.recv(1024)
+        except socket.timeout:
+            return
+        
+
+#--------------------------------------------------
+#メイン関数
+#--------------------------------------------------
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    rospy.Subscriber("/elecom_pad", Joy, subf_elecom_pad)
+    rospy.Subscriber("/cmd_vel", Twist, subf_cmd_vel)
+
+    pub_odom = rospy.Publisher('/odom', Odometry, queue_size = 1)
+
+    main_rate = rospy.Rate(20)    
+    while not rospy.is_shutdown():
+        comm_exia()
+
+        v = exia_snd_mess['v'].split(":")
+        v_params = v[1].split(",")
+        p = exia_rcv_mess['p'].split(":")
+        p_params = p[1].split(",")
+
+        quaternion = quaternion_from_euler(0.0, 0.0, float(p_params[3]) * DEG2RAD)
+
+        odom = Odometry()
+
+        odom.header.stamp = rospy.get_rostime();
+        odom.header.frame_id = "odom";
+    
+        odom.pose.pose.position.x = (float(p_params[1]) * mm2m) * -1
+        odom.pose.pose.position.y = float(p_params[2]) * mm2m
+        odom.pose.pose.position.z = 0
+        odom.pose.pose.orientation.x = float(quaternion[0])
+        odom.pose.pose.orientation.y = float(quaternion[1])
+        odom.pose.pose.orientation.z = float(quaternion[2])
+        odom.pose.pose.orientation.w = float(quaternion[3])
+        odom.twist.twist.linear.x = (float(v_params[1]) * mm2m) * -1
+        odom.twist.twist.linear.y = float(v_params[2]) * mm2m
+        odom.twist.twist.linear.z = 0
+        odom.twist.twist.angular.x = 0
+        odom.twist.twist.angular.y = 0
+        odom.twist.twist.angular.z = float(v_params[3]) * DEG2RAD
+
+        pub_odom.publish(odom)
+
+#        odom2base_link = tf.TransformBroadcaster()
+#        odom2base_link.sendTransform(((float(p_params[1]) * mm2m) * -1, float(p_params[2]) * mm2m, 0), tf.transformations.quaternion_from_euler(0, 0, float(p_params[3]) * DEG2RAD), rospy.Time.now(), "base_link", "odom")
+    
+        main_rate.sleep()
+
+    win_client_sock.close()

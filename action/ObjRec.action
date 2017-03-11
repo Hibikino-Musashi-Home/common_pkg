@@ -1,0 +1,6 @@
+sensor_msgs/Image obj_rec_goal
+---
+int64 obj_rec_result
+---
+bool obj_rec_feedback
+

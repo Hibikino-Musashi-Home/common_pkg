@@ -1,0 +1,6 @@
+<!-- -*- mode: XML -*- -->
+ 
+<launch>
+	<node pkg="dev_pkg" type="elecom_pad.py" name="elecom_pad" output="screen"/>
+	<node pkg="common_pkg" type="exia_controller.py" name="exia_controller" output="screen"/>
+</launch>

@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+
+import roslib.packages
+sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts')
+
+#import rospy
+
+from test1 import * 
+
+if __name__ == '__main__':
+    node_name = os.path.basename(__file__)
+    node_name = node_name.split('.')
+    rospy.init_node(node_name[0])
+
+    speech_single('おくちん')
