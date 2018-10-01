@@ -100,3 +100,10 @@ from subprocess import Popen
 from subprocess import PIPE
 
 from pygame.locals import * #pygame.localsの定数群を使うため
+
+
+from pocketsphinx.pocketsphinx import *
+from sphinxbase.sphinxbase import *
+
+
+import pyaudio
